@@ -1,0 +1,33 @@
+name: Build WorldEditor
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:  # 수동으로도 실행 가능
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: 코드 받아오기
+      uses: actions/checkout@v4
+
+    - name: Visual Studio 설정
+      uses: microsoft/setup-msbuild@v2
+
+    - name: WorldEditor 빌드
+      run: |
+        msbuild "Tool/WorldEditor_fixed_headers/WorldEditor.vcxproj" `
+          /p:Configuration=Release `
+          /p:Platform=Win32 `
+          /m
+
+    - name: 빌드 결과물 업로드
+      uses: actions/upload-artifact@v4
+      with:
+        name: WorldEditor-Release
+        path: |
+          Tool/WorldEditor_fixed_headers/Release/*.exe
+          Tool/WorldEditor_fixed_headers/Release/*.dll
+        retention-days: 30
