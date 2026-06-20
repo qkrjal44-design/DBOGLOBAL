@@ -1,4 +1,4 @@
-name: Build All Tools
+name: Build PackEditor
 
 on:
   push:
@@ -16,109 +16,30 @@ jobs:
     - name: Visual Studio MSBuild 설정
       uses: microsoft/setup-msbuild@v2
 
-    - name: 각 Tool 빌드
+    - name: ATL 컴포넌트 설치
       shell: pwsh
       run: |
-        $tools = @(
-          "2DParticleEditor",
-          "AutoPatchTool",
-          "Babidi",
-          "CJIRegistryEditor",
-          "Chaoz",
-          "CharacterEditor",
-          "DBOLauncher",
-          "DBOUnzip",
-          "DTEditor",
-          "ERSM",
-          "ERSMService",
-          "ERSManager",
-          "GUIEditor",
-          "GuiDevTool",
-          "ICSLauncher",
-          "ICSService",
-          "Launcher",
-          "MiHaeng4",
-          "ModelTool",
-          "ModelTool2",
-          "MrPoPo",
-          "NaviTool",
-          "NtlPathEngine",
-          "NtlWE",
-          "NtlXMLConvert",
-          "PackEditor",
-          "PatchServerManager",
-          "SimplePatcher",
-          "SkillCustomizeViewer",
-          "SoundEnvironment",
-          "TSEvtMaker",
-          "TSTool",
-          "TableEditor",
-          "TestPathEngine",
-          "TextureBind",
-          "TextureBuild",
-          "TextureConverter",
-          "Venus",
-          "WorldEditor",
-          "WorldPatchProcess"
-        )
+        $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+        Write-Host "VS 경로: $vsPath"
+        $installer = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
+        & $installer modify --installPath $vsPath --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart | Out-Null
+        Write-Host "ATL 설치 완료"
 
-        $failed = @()
-
-        foreach ($tool in $tools) {
-          $basePath = "DboClient/Tool/$tool"
-          
-          # .vcxproj 파일 찾기
-          $vcxproj = Get-ChildItem -Path $basePath -Filter "*.vcxproj" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-
-          if ($vcxproj) {
-            Write-Host "=============================="
-            Write-Host "빌드 중: $tool"
-            Write-Host "경로: $($vcxproj.FullName)"
-            Write-Host "=============================="
-
-            msbuild $vcxproj.FullName /p:Configuration=Release /p:Platform=Win32 /m /nologo
-
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "⚠️ $tool 빌드 실패 (계속 진행)"
-              $failed += $tool
-            } else {
-              Write-Host "✅ $tool 빌드 성공"
-            }
-          } else {
-            Write-Host "⚠️ $tool : .vcxproj 파일 없음, 건너뜀"
-            $failed += $tool
-          }
-        }
-
-        Write-Host ""
-        Write-Host "=============================="
-        Write-Host "빌드 완료 요약"
-        Write-Host "=============================="
-        if ($failed.Count -eq 0) {
-          Write-Host "✅ 모든 툴 빌드 성공!"
+    - name: PackEditor 빌드
+      shell: pwsh
+      run: |
+        $proj = Get-ChildItem -Path "DboClient/Tool/PackEditor" -Filter "*.vcxproj" -Recurse | Select-Object -First 1
+        if ($proj) {
+          Write-Host "찾은 파일: $($proj.FullName)"
+          msbuild $proj.FullName /p:Configuration=Release /p:Platform=Win32 /m /v:detailed
         } else {
-          Write-Host "⚠️ 실패한 툴들:"
-          $failed | ForEach-Object { Write-Host "  - $_" }
+          Write-Host "vcxproj 파일을 찾지 못했습니다"
+          exit 1
         }
 
-    - name: 빌드 결과물 수집
-      shell: pwsh
-      run: |
-        New-Item -ItemType Directory -Path "output" -Force
-        $tools = Get-ChildItem -Path "DboClient/Tool" -Directory
-        foreach ($tool in $tools) {
-          $exes = Get-ChildItem -Path $tool.FullName -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue
-          foreach ($exe in $exes) {
-            $dest = "output/$($tool.Name)"
-            New-Item -ItemType Directory -Path $dest -Force | Out-Null
-            Copy-Item $exe.FullName -Destination $dest
-            Write-Host "복사: $($exe.Name) → $dest"
-          }
-        }
-
-    - name: 빌드 결과물 업로드
+    - name: 결과물 업로드
       uses: actions/upload-artifact@v4
       with:
-        name: DBO-Tools-Release
-        path: output/
+        name: PackEditor
+        path: DboClient/Tool/PackEditor/**/*.exe
         retention-days: 30
